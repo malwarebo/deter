@@ -21,38 +21,23 @@ type Config struct {
 
 func LoadConfig() *Config {
 	cfg := &Config{
-		WebhookSecret:   getEnv("CF_WEBHOOK_SECRET", ""), // Required
-		CfAPIToken:      getEnv("CF_API_TOKEN", ""),      // Required
-		CfAccountID:     getEnv("CF_ACCOUNT_ID", ""),     // Required
-		TargetZoneID:    getEnv("TARGET_ZONE_ID", ""),    // Required
-		KVNamespaceID:   getEnv("KV_NAMESPACE_ID", ""),   // Required
+		WebhookSecret:   getEnv("CF_WEBHOOK_SECRET", ""),
+		CfAPIToken:      getEnv("CF_API_TOKEN", ""),
+		CfAccountID:     getEnv("CF_ACCOUNT_ID", ""),
+		TargetZoneID:    getEnv("TARGET_ZONE_ID", ""),
+		KVNamespaceID:   getEnv("KV_NAMESPACE_ID", ""),
 		ListenAddr:      getEnv("LISTEN_ADDR", ":8080"),
 		DefaultSecLevel: getEnv("DEFAULT_SEC_LEVEL", "medium"),
 		KVKeyPrefix:     getEnv("KV_KEY_PREFIX", "attack_status_zone_"),
 		WebhookTimeout:  getEnvDuration("WEBHOOK_TIMEOUT_SECONDS", 30*time.Second),
 	}
 
-	// Validate required fields
-	var missingVars []string
+	if cfg.CfAPIToken == "" || cfg.CfAccountID == "" || cfg.TargetZoneID == "" || cfg.KVNamespaceID == "" {
+		log.Fatal("FATAL: Missing required environment variables: CF_API_TOKEN, CF_ACCOUNT_ID, TARGET_ZONE_ID, KV_NAMESPACE_ID must be set.")
+	}
 
-	if cfg.CfAPIToken == "" {
-		missingVars = append(missingVars, "CF_API_TOKEN")
-	}
-	if cfg.CfAccountID == "" {
-		missingVars = append(missingVars, "CF_ACCOUNT_ID")
-	}
-	if cfg.TargetZoneID == "" {
-		missingVars = append(missingVars, "TARGET_ZONE_ID")
-	}
-	if cfg.KVNamespaceID == "" {
-		missingVars = append(missingVars, "KV_NAMESPACE_ID")
-	}
 	if cfg.WebhookSecret == "" {
-		missingVars = append(missingVars, "CF_WEBHOOK_SECRET")
-	}
-
-	if len(missingVars) > 0 {
-		log.Fatalf("FATAL: Missing required environment variables: %v must be set.", missingVars)
+		log.Println("WARN: CF_WEBHOOK_SECRET is not set. Webhook signature verification will be skipped (INSECURE!)")
 	}
 
 	log.Println("INFO: Configuration loaded successfully.")
