@@ -5,36 +5,36 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-	"io/ioutil"
+	"io" // Updated from io/ioutil
 	"log"
 	"net/http"
+	"strconv" // Uncommented for timestamp validation
 	"strings"
-	// "strconv" // Uncomment if implementing timestamp validation
+	"time" // Added for timestamp validation
 )
 
-// cloudflareSignatureHeader is the header containing the signature.
 const cloudflareSignatureHeader = "Cf-Webhook-Signature"
 
 // VerifyWebhookSignature is middleware to verify Cloudflare webhook signatures.
 func VerifyWebhookSignature(secret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// If no secret is configured, skip verification (but log it)
+			// If no secret is configured, reject the request (security improvement)
 			if secret == "" {
-				log.Println("Skipping webhook signature verification: Secret not configured.")
-				next.ServeHTTP(w, r)
+				log.Println("ERROR: Cannot verify webhook signature: Secret not configured.")
+				http.Error(w, "Webhook verification not configured", http.StatusInternalServerError)
 				return
 			}
 
 			// Read body FIRST, because signature depends on it
-			bodyBytes, err := ioutil.ReadAll(r.Body)
+			bodyBytes, err := io.ReadAll(r.Body) // Updated from ioutil.ReadAll
 			if err != nil {
 				log.Printf("ERROR: Failed to read request body for signature verification: %v", err)
 				http.Error(w, "Cannot read request body", http.StatusInternalServerError)
 				return
 			}
 			// Restore the body so the actual handler can read it
-			r.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+			r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes)) // Updated from ioutil.NopCloser
 
 			// Get signature header
 			sigHeader := r.Header.Get(cloudflareSignatureHeader)
@@ -52,7 +52,6 @@ func VerifyWebhookSignature(secret string) func(http.Handler) http.Handler {
 			}
 
 			// Signature is valid, proceed to the actual handler
-			// log.Println("DEBUG: Webhook signature verified successfully.")
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -80,19 +79,18 @@ func isValidSignature(signatureHeader string, body []byte, secret string) bool {
 		return false
 	}
 
-	// --- Optional: Timestamp validation ---
-	/*
-		ts, err := strconv.ParseInt(sigTimestamp, 10, 64)
-		if err != nil {
-			log.Printf("WARN: Failed to parse timestamp '%s' from signature header: %v", sigTimestamp, err)
-			return false // Invalid timestamp format
-		}
-		if time.Since(time.Unix(ts, 0)) > 5*time.Minute { // Example: 5 minute tolerance
-			log.Printf("WARN: Webhook timestamp %s is too old (outside tolerance window)", sigTimestamp)
-			return false // Reject potentially replayed request
-		}
-	*/
-	// --- End Optional Timestamp Validation ---
+	// Timestamp validation - Implement to prevent replay attacks
+	ts, err := strconv.ParseInt(sigTimestamp, 10, 64)
+	if err != nil {
+		log.Printf("WARN: Failed to parse timestamp '%s' from signature header: %v", sigTimestamp, err)
+		return false // Invalid timestamp format
+	}
+
+	// Reject if timestamp is too old (5 minute tolerance)
+	if time.Since(time.Unix(ts, 0)) > 5*time.Minute {
+		log.Printf("WARN: Webhook timestamp %s is too old (outside 5-minute tolerance window)", sigTimestamp)
+		return false // Reject potentially replayed request
+	}
 
 	// Decode the hex signature from the header
 	receivedSig, err := hex.DecodeString(sigHex)

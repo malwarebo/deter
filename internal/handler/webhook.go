@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io" // Updated from io/ioutil
 	"log"
 	"net/http"
 	"time"
@@ -15,27 +15,22 @@ import (
 	"github.com/malwarebo/deter/internal/mitigation"
 )
 
-// CloudflareDDoSWebhook represents the structure of expected webhook payloads.
-// Adjust based on the actual payload structure from Cloudflare notifications.
 type CloudflareDDoSWebhook struct {
-	AlertID     string                 `json:"alert_id"`
-	AlertType   string                 `json:"alert_type"`
-	ZoneID      string                 `json:"zone_id"`
-	EndedAt     *time.Time             `json:"ended_at"` // Key field to check if attack ended
-	SentAt      *time.Time             `json:"sent_at"`
-	StartedAt   *time.Time             `json:"started_at"`
-	Description string                 `json:"description"`
-	AttackID    string                 `json:"attack_id"`
-	// Add other potentially useful fields: AttackType, RuleID, Data, etc.
+	AlertID     string     `json:"alert_id"`
+	AlertType   string     `json:"alert_type"`
+	ZoneID      string     `json:"zone_id"`
+	EndedAt     *time.Time `json:"ended_at"`
+	SentAt      *time.Time `json:"sent_at"`
+	StartedAt   *time.Time `json:"started_at"`
+	Description string     `json:"description"`
+	AttackID    string     `json:"attack_id"`
 }
 
-// WebhookHandler holds dependencies for handling webhook requests.
 type WebhookHandler struct {
 	cfg      *config.Config
 	cfClient *cfAPI.CloudflareClient
 }
 
-// NewWebhookHandler creates a new handler instance.
 func NewWebhookHandler(cfg *config.Config, cfClient *cfAPI.CloudflareClient) *WebhookHandler {
 	return &WebhookHandler{
 		cfg:      cfg,
@@ -55,14 +50,14 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	// Read body (it was already read by middleware, but we need it again)
-	bodyBytes, err := ioutil.ReadAll(r.Body)
+	bodyBytes, err := io.ReadAll(r.Body) // Updated from ioutil.ReadAll
 	if err != nil {
 		log.Printf("ERROR: Webhook handler failed to re-read body: %v", err)
 		http.Error(w, "Internal server error reading request", http.StatusInternalServerError)
 		return
 	}
 	// Restore body just in case (though not strictly needed here anymore)
-	r.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes)) // Updated from ioutil.NopCloser
 	defer r.Body.Close()
 
 	// Parse payload
@@ -78,19 +73,42 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
 			return
 		}
-		// Process the first alert in the batch for simplicity
-		payload = payloads[0]
-		log.Printf("INFO: Processing first alert from potential batch.")
+
+		// Process all alerts in the batch instead of just the first one
+		log.Printf("INFO: Processing %d alerts from batch.", len(payloads))
+
+		// Process each alert sequentially
+		for i, alertPayload := range payloads {
+			log.Printf("INFO: Processing batch alert %d/%d: %s", i+1, len(payloads), alertPayload.AlertID)
+			err = h.processAlert(ctx, w, alertPayload)
+			if err != nil {
+				// Log error but continue processing other alerts
+				log.Printf("ERROR: Failed to process alert %s: %v", alertPayload.AlertID, err)
+			}
+		}
+
+		// Return overall success response
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "Processed %d webhook alerts", len(payloads))
+		return
 	}
 
+	// Process single alert
+	err = h.processAlert(ctx, w, payload)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error processing alert: %v", err), http.StatusInternalServerError)
+		return
+	}
+}
 
+// processAlert handles a single alert payload
+func (h *WebhookHandler) processAlert(ctx context.Context, w http.ResponseWriter, payload CloudflareDDoSWebhook) error {
 	log.Printf("INFO: Handling webhook for Alert Type: %s, Zone ID: %s, Attack ID: %s", payload.AlertType, payload.ZoneID, payload.AttackID)
 
 	// Check if it's for the target zone
 	if payload.ZoneID != h.cfg.TargetZoneID {
 		log.Printf("INFO: Ignoring webhook for non-target zone %s", payload.ZoneID)
-		fmt.Fprintf(w, "Webhook ignored (non-target zone).")
-		return
+		return nil // Not an error, just skipping
 	}
 
 	// Determine Action (Attack Started vs Ended)
@@ -103,8 +121,7 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	select {
 	case <-ctx.Done():
 		log.Printf("ERROR: Webhook processing timed out for Zone %s, Alert %s", payload.ZoneID, payload.AlertID)
-		http.Error(w, "Webhook processing timeout", http.StatusGatewayTimeout)
-		return
+		return fmt.Errorf("webhook processing timeout")
 	default:
 		// Proceed with mitigation logic
 		if isAttackActive {
@@ -114,8 +131,11 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// For single alerts, write response directly
+	if w.Header().Get("Content-Type") == "" {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "Webhook processed: %s", responseMsg)
+	}
 
-	// Respond to Cloudflare
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "Webhook processed: %s", responseMsg)
+	return nil
 }

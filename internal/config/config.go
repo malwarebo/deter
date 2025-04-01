@@ -7,7 +7,6 @@ import (
 	"time"
 )
 
-// Config holds the application configuration.
 type Config struct {
 	WebhookSecret   string
 	CfAPIToken      string
@@ -17,13 +16,12 @@ type Config struct {
 	ListenAddr      string
 	DefaultSecLevel string
 	KVKeyPrefix     string
-	WebhookTimeout  time.Duration // Optional: Timeout for webhook processing
+	WebhookTimeout  time.Duration
 }
 
-// LoadConfig loads configuration from environment variables.
 func LoadConfig() *Config {
 	cfg := &Config{
-		WebhookSecret:   getEnv("CF_WEBHOOK_SECRET", ""), // Required, but checked later
+		WebhookSecret:   getEnv("CF_WEBHOOK_SECRET", ""), // Required
 		CfAPIToken:      getEnv("CF_API_TOKEN", ""),      // Required
 		CfAccountID:     getEnv("CF_ACCOUNT_ID", ""),     // Required
 		TargetZoneID:    getEnv("TARGET_ZONE_ID", ""),    // Required
@@ -35,19 +33,32 @@ func LoadConfig() *Config {
 	}
 
 	// Validate required fields
-	if cfg.CfAPIToken == "" || cfg.CfAccountID == "" || cfg.TargetZoneID == "" || cfg.KVNamespaceID == "" {
-		log.Fatal("FATAL: Missing required environment variables: CF_API_TOKEN, CF_ACCOUNT_ID, TARGET_ZONE_ID, KV_NAMESPACE_ID must be set.")
+	var missingVars []string
+
+	if cfg.CfAPIToken == "" {
+		missingVars = append(missingVars, "CF_API_TOKEN")
 	}
-	// Warn if secret is missing, but allow for testing (middleware should handle enforcement)
+	if cfg.CfAccountID == "" {
+		missingVars = append(missingVars, "CF_ACCOUNT_ID")
+	}
+	if cfg.TargetZoneID == "" {
+		missingVars = append(missingVars, "TARGET_ZONE_ID")
+	}
+	if cfg.KVNamespaceID == "" {
+		missingVars = append(missingVars, "KV_NAMESPACE_ID")
+	}
 	if cfg.WebhookSecret == "" {
-		log.Println("WARN: CF_WEBHOOK_SECRET is not set. Webhook signature verification will be skipped (INSECURE!)")
+		missingVars = append(missingVars, "CF_WEBHOOK_SECRET")
+	}
+
+	if len(missingVars) > 0 {
+		log.Fatalf("FATAL: Missing required environment variables: %v must be set.", missingVars)
 	}
 
 	log.Println("INFO: Configuration loaded successfully.")
 	return cfg
 }
 
-// Helper function to get environment variables with a default value.
 func getEnv(key, fallback string) string {
 	if value, exists := os.LookupEnv(key); exists {
 		return value
@@ -55,7 +66,6 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
-// Helper function to get environment variable as time.Duration.
 func getEnvDuration(key string, fallback time.Duration) time.Duration {
 	valueStr := getEnv(key, "")
 	if valueStr == "" {
