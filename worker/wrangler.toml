@@ -1,0 +1,23 @@
+name = "deter-worker" # Choose a unique name for your worker
+main = "src/index.js" # Entry point for your worker code
+compatibility_date = "2023-10-30" # Update to a recent date
+
+# Account ID (Required)
+account_id = "YOUR_CLOUDFLARE_ACCOUNT_ID" # Replace with your actual Account ID
+
+# Environment variables accessible in the Worker script (env.VAR_NAME)
+[vars]
+TARGET_ZONE_ID = "YOUR_TARGET_ZONE_ID" # Replace with the specific Zone ID
+# TURNSTILE_SITE_KEY = "YOUR_TURNSTILE_SITE_KEY" # Uncomment and replace if using Turnstile
+
+# KV Namespace binding
+# The binding name ("KV_NAMESPACE") is how you access it in the worker script (env.KV_NAMESPACE)
+# The id is the actual ID of the KV Namespace you created in Cloudflare Dashboard.
+[[kv_namespaces]]
+binding = "KV_NAMESPACE"
+id = "YOUR_KV_NAMESPACE_ID" # Replace with your actual KV Namespace ID
+
+# Route definition (optional here, can be configured in dashboard)
+# [[routes]]
+# pattern = "yourdomain.com/*" # Replace with your domain
+# zone_id = "YOUR_TARGET_ZONE_ID" # Replace with your Zone ID
