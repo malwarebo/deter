@@ -5,7 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -23,14 +23,14 @@ func VerifyWebhookSignature(secret string) func(http.Handler) http.Handler {
 				return
 			}
 
-			bodyBytes, err := ioutil.ReadAll(r.Body)
+			bodyBytes, err := io.ReadAll(r.Body)
 			if err != nil {
 				log.Printf("ERROR: Failed to read request body for signature verification: %v", err)
 				http.Error(w, "Cannot read request body", http.StatusInternalServerError)
 				return
 			}
 
-			r.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+			r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 			sigHeader := r.Header.Get(cloudflareSignatureHeader)
 			if sigHeader == "" {

@@ -6,17 +6,15 @@ import (
 	"log"
 
 	"github.com/cloudflare/cloudflare-go"
-	deterConfig "github.com/malwarebo/deter/internal/config" // Use alias
+	deterConfig "github.com/malwarebo/deter/internal/config"
 )
 
-// CloudflareClient wraps the official Cloudflare Go SDK.
 type CloudflareClient struct {
 	api       *cloudflare.API
 	accountID string
 	ctx       context.Context
 }
 
-// NewCloudflareClient creates a new Cloudflare API client instance.
 func NewCloudflareClient(cfg *deterConfig.Config) (*CloudflareClient, error) {
 	api, err := cloudflare.NewWithAPIToken(cfg.CfAPIToken)
 	if err != nil {
@@ -37,14 +35,11 @@ func (c *CloudflareClient) SetSecurityLevel(zoneID, level string) error {
 	rc := cloudflare.ZoneIdentifier(zoneID)
 	settingID := "security_level" // The specific ID for this setting
 
-	// Create the params struct as required by the SDK function
 	params := cloudflare.UpdateZoneSettingParams{
 		Name:  settingID,
 		Value: level, // Value is likely an interface{} or specific type, string should work
 	}
 
-	// Call the API with the context, resource container, and params struct
-	// Correctly handle the two return values (response, error), ignoring the response (_)
 	_, err := c.api.UpdateZoneSetting(c.ctx, rc, params)
 	if err != nil {
 		return fmt.Errorf("failed to update zone setting '%s' to '%s' for zone %s: %w", settingID, level, zoneID, err)
@@ -58,7 +53,6 @@ func (c *CloudflareClient) WriteKvValue(namespaceID, key, value string) error {
 	log.Printf("API CALL: Writing to KV Namespace %s: Key=%s, Value=%s", namespaceID, key, value)
 	rc := cloudflare.AccountIdentifier(c.accountID) // KV operates at account level
 
-	// Create the params struct as required by the SDK function
 	params := cloudflare.WriteWorkersKVEntryParams{
 		NamespaceID: namespaceID,
 		Key:         key,

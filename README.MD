@@ -1,14 +1,14 @@
-# Deter - Cloudflare DDoS Mitigation Automation
+# Deter - a DDOS mitigation tool for Cloudflare
 
 [![Go Build](https://github.com/malwarebo/deter/actions/workflows/go-build.yml/badge.svg)](https://github.com/malwarebo/deter/actions/workflows/go-build.yml)
 
-Deter is a Go-based service that automatically responds to Cloudflare DDoS attack alerts by applying preconfigured mitigation strategies.
+Deter automatically responds to Cloudflare DDoS attack alerts by applying preconfigured mitigation strategies.
 
 ## Overview
 
 Deter consists of two main components:
 
-1. **Deter Server**: A Go application that receives Cloudflare webhook notifications about DDoS attacks and triggers appropriate security responses.
+1. **Deter Server**: Application that receives Cloudflare webhook notifications about DDoS attacks and triggers appropriate security responses.
 2. **Deter Worker**: A Cloudflare Worker that implements client-side challenges (e.g., proof-of-work) during active attacks.
 
 Together, these components create a defense system that can:
